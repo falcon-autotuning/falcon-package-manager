@@ -1,7 +1,3 @@
-# Falcon Typing Makefile
-# Manages build, test, install, and uninstall for libfalcon-typing.so
-
-
 .PHONY: all configure build-debug build-release test test-debug test-verbose \
         clean install uninstall clangd-helpers help
 
