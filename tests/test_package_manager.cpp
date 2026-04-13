@@ -1,4 +1,4 @@
-#include "falcon-pm/PackageManager.hpp"
+#include "falcon-package-manager/PackageManager.hpp"
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>

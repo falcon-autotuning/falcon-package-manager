@@ -1,7 +1,7 @@
 #pragma once
-#include "falcon-pm/PackageCache.hpp"
-#include "falcon-pm/PackageManifest.hpp"
-#include "falcon-pm/PackageResolver.hpp"
+#include "falcon-package-manager/PackageCache.hpp"
+#include "falcon-package-manager/PackageManifest.hpp"
+#include "falcon-package-manager/PackageResolver.hpp"
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -24,7 +24,7 @@ struct InstalledPackage {
  *
  * Used by:
  *  - AutotunerEngine (at load time, to resolve imports in .fal files)
- *  - falcon-pm CLI (for user-facing commands)
+ *  - falcon-package-manager CLI (for user-facing commands)
  *
  * Project root is determined by walking up from the given start path looking
  * for `falcon.yml`.  If no `falcon.yml` exists, operations that need it

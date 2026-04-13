@@ -1,5 +1,5 @@
-#include "falcon-pm/PackageCache.hpp"
-#include "falcon-pm/PackageResolver.hpp"
+#include "falcon-package-manager/PackageCache.hpp"
+#include "falcon-package-manager/PackageResolver.hpp"
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>

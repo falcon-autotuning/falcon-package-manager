@@ -1,9 +1,6 @@
-#include "falcon-pm/PackageManager.hpp"
-#include <algorithm>
-#include <filesystem>
+#include "falcon-package-manager/PackageManager.hpp"
+#include "falcon-package-manager/PackageCache.hpp"
 #include <iostream>
-#include <stdexcept>
-#include <vector>
 
 namespace falcon::pm {
 
@@ -172,9 +169,10 @@ void PackageManager::install(const std::string &source,
 
 void PackageManager::remove(const std::string &package_name) {
   auto &deps = manifest_.dependencies;
-  auto it = std::find_if(deps.begin(), deps.end(), [&](const Dependency &d) {
-    return d.name == package_name;
-  });
+  auto it =
+      std::ranges::find_if(deps.begin(), deps.end(), [&](const Dependency &d) {
+        return d.name == package_name;
+      });
 
   if (it != deps.end()) {
     deps.erase(it);

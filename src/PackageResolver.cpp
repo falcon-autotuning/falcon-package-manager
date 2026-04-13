@@ -1,10 +1,6 @@
-#include "falcon-pm/PackageResolver.hpp"
-#include "falcon-pm/PackageCache.hpp"
-#include "falcon-pm/PackageManifest.hpp"
-#include <algorithm>
-#include <iostream>
-#include <sstream>
-#include <stdexcept>
+#include "falcon-package-manager/PackageResolver.hpp"
+#include "falcon-package-manager/PackageCache.hpp"
+#include "falcon-package-manager/PackageManifest.hpp"
 
 namespace falcon::pm {
 

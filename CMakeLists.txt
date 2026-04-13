@@ -3,6 +3,7 @@ project(falcon-package-manager VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(yaml-cpp CONFIG REQUIRED)
@@ -36,7 +37,7 @@ target_link_libraries(falcon-package-manager
 # ─── CLI binary ──────────────────────────────────────────────────────────────
 add_executable(falcon-package-manager-cli src/main_cli.cpp)
 target_link_libraries(falcon-package-manager-cli PRIVATE falcon-package-manager)
-set_target_properties(falcon-package-manager-cli PROPERTIES OUTPUT_NAME falcon-package-manager)
+set_target_properties(falcon-package-manager-cli PROPERTIES OUTPUT_NAME falcon-pm)
 
 # ─── Unit tests ──────────────────────────────────────────────────────────────
 if(BUILD_TESTS)
