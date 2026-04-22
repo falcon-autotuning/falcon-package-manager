@@ -59,11 +59,15 @@ int main(int argc, char *argv[]) {
     if (cmd == "list" || cmd == "--list") {
       auto pkgs = pm.list();
       if (pkgs.empty())
-        std::cout << "(no packages cached)\n";
+        std::cout << "(no packages available)\n";
       else {
+        std::cout << "Available Falcon Packages:\n";
         for (const auto &p : pkgs) {
-          std::cout << p.name << " (" << p.version << ") -> "
-                    << p.cached_path.string() << '\n';
+          std::cout << "  - " << p.name << " (" << p.version << ")";
+          if (p.github == "(global runtime)") {
+            std::cout << " [global]";
+          }
+          std::cout << " -> " << p.cached_path.string() << '\n';
         }
       }
       return 0;

@@ -108,6 +108,7 @@ public:
 
 private:
   std::filesystem::path project_root_;
+  std::vector<std::filesystem::path> search_paths_;
   PackageManifest manifest_;
   std::unique_ptr<PackageCache> cache_;
   std::unique_ptr<PackageResolver> resolver_;

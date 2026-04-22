@@ -183,8 +183,9 @@ bool PackageResolver::is_package(const std::filesystem::path &path) {
 }
 
 PackageResolver::PackageResolver(std::filesystem::path project_root,
-                                 PackageCache &cache)
-    : project_root_(std::move(project_root)), cache_(cache) {}
+                                 PackageCache &cache,
+                                 std::vector<std::filesystem::path> global_search_paths)
+    : project_root_(std::move(project_root)), search_paths_(std::move(global_search_paths)), cache_(cache) {}
 
 PackageResolver::ResolvedImport
 PackageResolver::resolve(const std::string &import_path,
@@ -208,7 +209,30 @@ PackageResolver::resolve(const std::string &import_path,
     return resolve_local(import_path, project_root_);
   }
 
+  for (const auto& path : search_paths_) {
+    auto candidate = path / import_path;
+    if (std::filesystem::exists(candidate)) {
+      return resolve_local(import_path, path);
+    }
+  }
+
   throw std::runtime_error("Cannot resolve import '" + import_path + "'");
+}
+
+std::vector<std::filesystem::path>
+PackageResolver::discover_packages(const std::filesystem::path &root) {
+  std::vector<std::filesystem::path> results;
+  if (!std::filesystem::exists(root))
+    return results;
+
+  for (const auto &entry :
+       std::filesystem::recursive_directory_iterator(root)) {
+    if (entry.is_directory() &&
+        std::filesystem::exists(entry.path() / "falcon.yml")) {
+      results.push_back(entry.path());
+    }
+  }
+  return results;
 }
 
 std::vector<PackageResolver::ResolvedImport>

@@ -1,6 +1,8 @@
 #include "falcon-package-manager/PackageManager.hpp"
 #include "falcon-package-manager/PackageCache.hpp"
 #include <iostream>
+#include <set>
+#include <sstream>
 
 namespace falcon::pm {
 
@@ -15,9 +17,24 @@ PackageManager::PackageManager(const std::filesystem::path &start) {
     manifest_ = PackageManifest::make_empty("(unnamed)");
   }
 
+  // Initialize global search paths from environment or defaults
+  const char *env_paths = std::getenv("FALCON_LIBRARY_PATH");
+  if (env_paths) {
+    std::string paths_str(env_paths);
+    std::string token;
+    std::istringstream iss(paths_str);
+    while (std::getline(iss, token, ':')) {
+      if (!token.empty())
+        search_paths_.push_back(token);
+    }
+  }
+  // Default system path
+  search_paths_.push_back("/opt/falcon/packages");
+
   auto cache_dir = project_root_ / ".falcon" / "cache";
   cache_ = std::make_unique<PackageCache>(cache_dir);
-  resolver_ = std::make_unique<PackageResolver>(project_root_, *cache_);
+  resolver_ = std::make_unique<PackageResolver>(project_root_, *cache_,
+                                                search_paths_);
 }
 
 void PackageManager::init(const std::filesystem::path &dir,
@@ -94,7 +111,9 @@ PackageManager::resolve_imports(const std::filesystem::path &fal_file,
 
 std::vector<InstalledPackage> PackageManager::list() const {
   std::vector<InstalledPackage> result;
+  std::set<std::string> seen_names;
 
+  // 1. Project Dependencies (Explicitly declared in falcon.yml)
   for (const auto &d : manifest_.dependencies) {
     InstalledPackage pkg;
     pkg.name = d.name;
@@ -102,7 +121,6 @@ std::vector<InstalledPackage> PackageManager::list() const {
 
     if (d.github) {
       pkg.github = *d.github;
-      // Extract the repo name for the cache path
       auto slash_pos = d.github->find('/');
       std::string repo = (slash_pos != std::string::npos)
                              ? d.github->substr(slash_pos + 1)
@@ -112,8 +130,32 @@ std::vector<InstalledPackage> PackageManager::list() const {
       pkg.cached_path = *d.local_path;
     }
 
+    seen_names.insert(pkg.name);
     result.push_back(std::move(pkg));
   }
+
+  // 2. Global Discovery (Pre-installed "Standard Library" packages)
+  for (const auto &search_path : search_paths_) {
+    auto discovered = PackageResolver::discover_packages(search_path);
+    for (const auto &pkg_root : discovered) {
+      try {
+        auto m = PackageManifest::load(pkg_root / "falcon.yml");
+        if (seen_names.find(m.name) == seen_names.end()) {
+          InstalledPackage pkg;
+          pkg.name = m.name;
+          pkg.version = m.version;
+          pkg.cached_path = pkg_root;
+          pkg.github = "(global runtime)";
+
+          seen_names.insert(pkg.name);
+          result.push_back(std::move(pkg));
+        }
+      } catch (...) {
+        // Skip malformed packages in global paths
+      }
+    }
+  }
+
   return result;
 }
 

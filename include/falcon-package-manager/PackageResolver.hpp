@@ -21,7 +21,8 @@ class PackageCache;
  */
 class PackageResolver {
 public:
-  PackageResolver(std::filesystem::path project_root, PackageCache &cache);
+  PackageResolver(std::filesystem::path project_root, PackageCache &cache,
+                  std::vector<std::filesystem::path> global_search_paths = {});
 
   struct ResolvedImport {
     std::filesystem::path absolute_path; ///< Absolute path to the .fal file
@@ -60,6 +61,14 @@ public:
    * @return True if the path is a Falcon package
    */
   static bool is_package(const std::filesystem::path &path);
+
+  /**
+   * @brief Recursively discover all Falcon packages within a directory tree.
+   * @param root The directory to start the search from.
+   * @return Vector of absolute paths to package roots.
+   */
+  static std::vector<std::filesystem::path>
+  discover_packages(const std::filesystem::path &root);
 
 private:
   /**
@@ -106,6 +115,7 @@ private:
   static std::string http_get(const std::string &url);
 
   std::filesystem::path project_root_;
+  std::vector<std::filesystem::path> search_paths_;
   PackageCache &cache_;
 };
 
