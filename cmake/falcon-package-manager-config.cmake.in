@@ -10,3 +10,4 @@ find_dependency(CURL REQUIRED)
 include("${CMAKE_CURRENT_LIST_DIR}/falcon-package-manager-targets.cmake")
 
 check_required_components(falcon-package-manager)
+check_required_components(falcon-package-manager-cli)
