@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(falcon-package-manager VERSION 1.0.0 LANGUAGES CXX)
+project(falcon-package-manager VERSION 1.0.4 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -72,14 +72,15 @@ include(CMakePackageConfigHelpers)
 
 install(TARGETS falcon-package-manager
   EXPORT falcon-package-manager-targets
-  LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib
-  INCLUDES DESTINATION include
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 # Install CLI separately WITHOUT exporting it
 install(TARGETS falcon-package-manager-cli
-  RUNTIME DESTINATION bin
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
 install(DIRECTORY include/falcon-package-manager
