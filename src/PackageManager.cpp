@@ -33,8 +33,8 @@ PackageManager::PackageManager(const std::filesystem::path &start) {
 
   auto cache_dir = project_root_ / ".falcon" / "cache";
   cache_ = std::make_unique<PackageCache>(cache_dir);
-  resolver_ = std::make_unique<PackageResolver>(project_root_, *cache_,
-                                                search_paths_);
+  resolver_ =
+      std::make_unique<PackageResolver>(project_root_, *cache_, search_paths_);
 }
 
 void PackageManager::init(const std::filesystem::path &dir,
@@ -67,10 +67,17 @@ void PackageManager::build(const std::filesystem::path &dir,
       throw std::runtime_error("Source file not found for FFI compilation: " +
                                cpp_path.string());
     }
+    const char *cxx_compiler = std::getenv("CXX");
+    if (cxx_compiler) {
+      std::cout << "Using CXX: " << cxx_compiler << "\n";
+    } else {
+      std::cout << "Using default compiler: g++\n";
+      cxx_compiler = "g++";
+    }
 
-    std::string cmd = "clang++ -std=c++17 -fPIC -shared -O2 -o \"" +
-                      so_path.string() + "\" \"" + cpp_path.string() + "\"" +
-                      extra_flags;
+    std::string cmd = std::string(cxx_compiler) +
+                      " -std=c++17 -fPIC -shared -O2 -o \"" + so_path.string() +
+                      "\" \"" + cpp_path.string() + "\"" + extra_flags;
     std::cout << "Compiling " << cpp_path.filename().string() << " -> "
               << so_name << "...\n";
 
