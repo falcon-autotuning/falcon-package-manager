@@ -6,8 +6,68 @@
 #include <nlohmann/json.hpp>
 #include <sstream>
 using json = nlohmann::json;
+using namespace falcon::pm;
 
-namespace falcon::pm {
+namespace {
+
+PackageResolver::ResolvedImport
+resolve_as_package(const std::filesystem::path &abs) {
+  std::filesystem::path main_path;
+  try {
+    main_path = abs / PackageResolver::get_package_main_file(abs);
+  } catch (...) {
+    throw std::runtime_error("No .fal files found in package: " + abs.string());
+  }
+  return PackageResolver::ResolvedImport{main_path,           main_path, abs,
+                                         abs.stem().string(), "",        true};
+}
+
+PackageResolver::ResolvedImport
+resolve_as_file(const std::filesystem::path &abs) {
+  auto package_root = PackageManifest::find_root(abs.parent_path());
+  std::string sha = PackageCache::sha256_file(abs);
+  if (package_root) {
+    return PackageResolver::ResolvedImport{
+        abs, abs, *package_root, abs.stem().string(), sha, true};
+  } else {
+    return PackageResolver::ResolvedImport{
+        abs, abs, abs.parent_path(), abs.stem().string(), sha, false};
+  }
+}
+
+PackageResolver::ResolvedImport
+resolve_as_module_dir(const std::filesystem::path &abs,
+                      const std::filesystem::path &package_root) {
+  auto rel_path = std::filesystem::relative(abs, package_root);
+  std::string module_subpath = rel_path.string();
+  std::filesystem::path main_path;
+  try {
+    std::string main_file =
+        PackageResolver::get_package_main_file(package_root, module_subpath);
+    main_path = package_root / main_file;
+  } catch (...) {
+    std::vector<std::filesystem::path> fal_files;
+    for (const auto &entry : std::filesystem::directory_iterator(abs)) {
+      if (entry.is_regular_file() && entry.path().extension() == ".fal") {
+        fal_files.push_back(entry.path());
+      }
+    }
+    if (fal_files.size() == 1) {
+      main_path = fal_files[0];
+    } else if (fal_files.size() > 1) {
+      throw std::runtime_error("Ambiguous module directory " + abs.string() +
+                               " contains multiple .fal files");
+    } else {
+      throw std::runtime_error("No .fal file found for module: " +
+                               abs.string());
+    }
+  }
+  std::string sha = PackageCache::sha256_file(main_path);
+  return PackageResolver::ResolvedImport{
+      main_path, main_path, package_root, main_path.stem().string(), sha, true};
+}
+
+} // namespace
 
 std::tuple<int, int, int>
 PackageResolver::parse_semver(const std::string &version_str) {
@@ -305,35 +365,85 @@ std::filesystem::path PackageResolver::download_github_package(
 }
 
 std::string PackageResolver::get_package_main_file(
-    const std::filesystem::path &package_root) {
-  auto manifest_file = package_root / "falcon.yml";
+    const std::filesystem::path &package_root,
+    const std::string &module_subpath) {
 
-  if (std::filesystem::exists(manifest_file)) {
-    try {
-      auto manifest = PackageManifest::load(manifest_file);
-      std::string pkg_name = manifest.name;
-      if (pkg_name.empty())
-        pkg_name = package_root.stem().string();
-      if (std::filesystem::exists(package_root / (pkg_name + ".fal"))) {
-        return pkg_name + ".fal";
+  // Determine where to look for the main file
+  std::filesystem::path search_dir = package_root;
+  std::string module_name = module_subpath;
+
+  if (!module_subpath.empty()) {
+    search_dir = package_root / module_subpath;
+    // Extract the last component of the subpath as module name
+    size_t last_slash = module_subpath.find_last_of('/');
+    if (last_slash != std::string::npos) {
+      module_name = module_subpath.substr(last_slash + 1);
+    }
+  }
+
+  // Strategy 1: Look for {module_name}.fal in the search directory
+  if (std::filesystem::exists(search_dir / (module_name + ".fal"))) {
+    return (module_subpath.empty() ? "" : module_subpath + "/") + module_name +
+           ".fal";
+  }
+
+  // Strategy 2: If module_subpath is specified, look for subdir/module_name.fal
+  if (!module_subpath.empty()) {
+    auto nested_path = search_dir / module_name;
+    if (std::filesystem::is_directory(nested_path) &&
+        std::filesystem::exists(nested_path / (module_name + ".fal"))) {
+      return module_subpath + "/" + module_name + "/" + module_name + ".fal";
+    }
+  }
+
+  // Strategy 3: For single-module packages, try package name
+  if (module_subpath.empty()) {
+    auto manifest_file = package_root / "falcon.yml";
+    if (std::filesystem::exists(manifest_file)) {
+      try {
+        auto manifest = PackageManifest::load(manifest_file);
+        std::string pkg_name = manifest.name;
+        if (!pkg_name.empty() &&
+            std::filesystem::exists(package_root / (pkg_name + ".fal"))) {
+          return pkg_name + ".fal";
+        }
+      } catch (...) {
       }
-    } catch (...) {
     }
   }
 
-  std::string dir_name = package_root.stem().string();
-  if (std::filesystem::exists(package_root / (dir_name + ".fal"))) {
-    return dir_name + ".fal";
-  }
+  // Strategy 4: Search for any .fal file in the directory
+  if (std::filesystem::exists(search_dir)) {
+    std::vector<std::filesystem::path> fal_files;
+    for (const auto &entry : std::filesystem::directory_iterator(search_dir)) {
+      if (entry.is_regular_file() && entry.path().extension() == ".fal") {
+        fal_files.push_back(entry.path());
+      }
+    }
 
-  for (const auto &entry : std::filesystem::directory_iterator(package_root)) {
-    if (entry.is_regular_file() && entry.path().extension() == ".fal") {
-      return entry.path().filename().string();
+    if (fal_files.size() == 1) {
+      auto relative = fal_files[0].filename().string();
+      if (module_subpath.empty()) {
+        return relative;
+      } else {
+        return module_subpath + "/" + relative;
+      }
+    } else if (fal_files.size() > 1) {
+      throw std::runtime_error(
+          "Ambiguous module directory: " + search_dir.string() +
+          " contains multiple .fal files. Please specify the exact file path.");
     }
   }
 
-  throw std::runtime_error("No main .fal file found in package: " +
-                           package_root.string());
+  // No .fal file found
+  if (module_subpath.empty()) {
+    throw std::runtime_error("No main .fal file found in package: " +
+                             package_root.string());
+  } else {
+    throw std::runtime_error("No .fal file found for module '" +
+                             module_subpath +
+                             "' in package: " + package_root.string());
+  }
 }
 
 bool PackageResolver::is_package(const std::filesystem::path &path) {
@@ -414,30 +524,25 @@ PackageResolver::resolve_local(const std::filesystem::path &raw,
   auto abs = std::filesystem::weakly_canonical(base_dir / raw);
 
   if (is_package(abs)) {
-    resolve_package_dependencies(abs);
+    return resolve_as_package(abs);
+  }
 
-    std::filesystem::path main_path;
-    try {
-      main_path = abs / get_package_main_file(abs);
-    } catch (...) {
-      throw std::runtime_error("No .fal files found in package: " +
-                               abs.string());
-    }
+  if (std::filesystem::is_regular_file(abs) && abs.extension() == ".fal") {
+    return resolve_as_file(abs);
+  }
 
-    return ResolvedImport{main_path,           main_path, abs,
-                          abs.stem().string(), "",        true};
+  auto package_root = PackageManifest::find_root(abs);
+  if (package_root && std::filesystem::is_directory(abs)) {
+    return resolve_as_module_dir(abs, *package_root);
   }
 
   if (!std::filesystem::exists(abs)) {
     throw std::runtime_error("Import not found: " + abs.string());
   }
 
-  // Compute the SHA256 for local files so the test passes and caching
-  // can utilize it
   std::string sha = PackageCache::sha256_file(abs);
-
-  return ResolvedImport{abs, abs,  abs.parent_path(), abs.stem().string(),
-                        sha, false};
+  return PackageResolver::ResolvedImport{
+      abs, abs, abs.parent_path(), abs.stem().string(), sha, false};
 }
 
 PackageResolver::ResolvedImport
@@ -445,13 +550,10 @@ PackageResolver::resolve_github_package(const std::string &import_path) {
   auto github_url = parse_github_url(import_path);
   auto [package_dir, subpath] = find_package_root_in_path(github_url);
 
-  // If a version tag was specified in the URL (via @), use it directly
   std::string version_tag = github_url.branch;
   if (version_tag != "main") {
-    // Branch/tag was specified in the import
-    // Keep it as-is (user explicitly specified a version)
+    // Version was explicitly specified via @ syntax
   } else {
-    // No version specified, will default to latest
     version_tag = "";
   }
 
@@ -461,14 +563,24 @@ PackageResolver::resolve_github_package(const std::string &import_path) {
   resolve_package_dependencies(pkg_root);
 
   std::filesystem::path file_abs_path;
-  if (subpath.empty()) {
-    file_abs_path = pkg_root / get_package_main_file(pkg_root);
-  } else {
-    file_abs_path = pkg_root / subpath;
-  }
+  std::string module_name;
 
-  std::string module_name = subpath.empty() ? pkg_root.stem().string()
-                                            : file_abs_path.stem().string();
+  if (subpath.empty()) {
+    // No subpath specified - try to find main file
+    std::string main_file = get_package_main_file(pkg_root);
+    file_abs_path = pkg_root / main_file;
+    module_name = std::filesystem::path(main_file).stem().string();
+  } else if (subpath.ends_with(".fal")) {
+    // Explicit .fal file specified
+    file_abs_path = pkg_root / subpath;
+    module_name = std::filesystem::path(subpath).stem().string();
+  } else {
+    // Module subpath specified (e.g., "array")
+    // Find the .fal file for this module
+    std::string main_file = get_package_main_file(pkg_root, subpath);
+    file_abs_path = pkg_root / main_file;
+    module_name = std::filesystem::path(main_file).stem().string();
+  }
 
   return ResolvedImport{file_abs_path, file_abs_path, pkg_root, module_name, "",
                         true};
@@ -580,5 +692,3 @@ std::string PackageResolver::http_get(const std::string &url) {
   std::filesystem::remove(temp_response);
   return response;
 }
-
-} // namespace falcon::pm

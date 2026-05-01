@@ -51,6 +51,7 @@ if(BUILD_TESTS)
     tests/test_package_manager.cpp
     tests/test_integration_github_packages.cpp
     tests/test_version_resolution.cpp
+    tests/test_multimodule_packages.cpp
   )
   target_link_libraries(falcon-package-manager-tests
     PRIVATE falcon-package-manager GTest::gtest GTest::gtest_main

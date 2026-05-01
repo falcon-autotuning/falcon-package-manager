@@ -16,6 +16,8 @@ class PackageCache;
  *  - Local packages:         "../shared/array" (directory with falcon.yml)
  *  - GitHub packages:        "github.com/owner/repo/libs/collections/array"
  *  - Version-pinned imports: "github.com/owner/repo@v1.2.3"
+ *  - Multi-module imports:   "github.com/owner/repo/array" (resolves to
+ * array.fal or array/array.fal)
  *
  * A Falcon package is identified by a `falcon.yml` metadata file in its root
  * directory.
@@ -25,6 +27,13 @@ class PackageCache;
  *  SemVer constraints (^1.0.0, ~2.1.0, 1.2.3, *). If a constraint is provided,
  *  it queries GitHub releases and selects the highest matching version.
  *  If no version is specified or constraint is "*", the latest release is used.
+ *
+ * Multi-Module Packages:
+ *  Packages can contain multiple modules in subdirectories. The resolver will:
+ *  1. Look for module_name.fal in the subdir
+ *  2. Look for subdir/module_name.fal
+ *  3. Look for any .fal file in the subdir
+ *  4. Return a helpful error if ambiguous or not found
  */
 class PackageResolver {
 public:
@@ -76,6 +85,25 @@ public:
    */
   static std::vector<std::filesystem::path>
   discover_packages(const std::filesystem::path &root);
+  /**
+   * @brief Find the main .fal file for a module within a package.
+   *
+   * For single-module packages, finds the main .fal file.
+   * For multi-module packages with a subpath, finds the module's .fal file.
+   *
+   * Supports patterns:
+   *  - module_name.fal (in package root)
+   *  - module_subdir/module_name.fal
+   *  - module_subdir/subdir.fal (any .fal in the subdir)
+   *
+   * @param package_root Root of the package
+   * @param module_subpath Optional subpath to a module (e.g., "array")
+   * @return Filename relative to package_root
+   * @throws std::runtime_error if no .fal file is found
+   */
+  static std::string
+  get_package_main_file(const std::filesystem::path &package_root,
+                        const std::string &module_subpath = "");
 
 private:
   /**
@@ -118,9 +146,6 @@ private:
                                                 const std::string &repo,
                                                 const std::string &version,
                                                 const std::string &package_dir);
-
-  static std::string
-  get_package_main_file(const std::filesystem::path &package_root);
 
   static std::string http_get(const std::string &url);
 
