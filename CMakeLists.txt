@@ -50,6 +50,7 @@ if(BUILD_TESTS)
     tests/test_resolver.cpp
     tests/test_package_manager.cpp
     tests/test_integration_github_packages.cpp
+    tests/test_version_resolution.cpp
   )
   target_link_libraries(falcon-package-manager-tests
     PRIVATE falcon-package-manager GTest::gtest GTest::gtest_main
@@ -60,8 +61,11 @@ if(BUILD_TESTS)
   add_executable(falcon-package-manager-integration-tests
     tests/test_integration_github_packages.cpp
   )
-  target_link_libraries(falcon-package-manager-integration-tests
-    PRIVATE falcon-package-manager GTest::gtest GTest::gtest_main
+  target_link_libraries(falcon-package-manager-integration-tests PRIVATE
+    falcon-package-manager
+    GTest::gtest
+    GTest::gtest_main
+    nlohmann_json::nlohmann_json
   )
   add_test(NAME falcon-package-manager-integration-tests COMMAND falcon-package-manager-integration-tests)
 endif()

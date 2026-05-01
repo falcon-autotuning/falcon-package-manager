@@ -48,6 +48,117 @@ auto executables = pkg.get_executables();
 
 ---
 
+## Package Management & Dependencies
+
+### Declaring Dependencies
+
+Packages declare their dependencies in ==falcon.yml==:
+
+```YAML
+name: my-project
+version: 1.0.0
+maintainer: Your Name
+github: your-org/my-project
+license: MPL-2.0
+
+ffi:
+  my-wrapper.so: sha256:abc123def456...
+
+dependencies:
+  - name: testing
+    version: "^1.0.0"
+    github: falcon-autotuning/testing
+  
+  - name: utils
+    version: "~1.2.0"
+    github: falcon-autotuning/utils
+  
+  - name: core
+    version: "1.3.2"
+    github: falcon-autotuning/core
+  
+  - name: local-lib
+    local_path: ../shared/lib
+```
+
+### Version Resolution
+
+The package manager resolves dependencies to specific GitHub releases using **SemVer constraints**:
+
+| Constraint | Meaning | Example |
+|------------|---------|---------|
+| `^1.2.3`   | Caret: Compatible with 1.2.3 (allows changes that don't modify the major version) | Matches 1.2.3, 1.2.4, 1.3.0, but NOT 2.0.0 |
+| `~1.2.3`   | Tilde: Compatible with 1.2.x (allows patch-level changes only) | Matches 1.2.3, 1.2.4, but NOT 1.3.0 |
+| `1.2.3`    | Exact: Requires exactly this version | Matches only 1.2.3 |
+| `*` or empty | Any: Uses the latest release | Matches the most recent release |
+
+### How Version Resolution Works
+
+1. Dependency Declaration: A ==falcon.yml== lists dependencies with SemVer constraints
+2. Release Discovery: When resolving, the package manager queries GitHub's releases API
+3. Constraint Matching: The highest version matching the constraint is selected
+4. Download & Cache: The matched release is downloaded (tarball) and cached locally
+5. Validation: FFI binary hashes (from ==falcon.yml==) are verified for security
+
+### Example: Using Versioned Packages
+
+Given ==falcon-autotuning/testing== could have releases: ==v1.0.0==, ==v1.0.1==, ==v1.1.0==, ==v1.2.0==, ==v2.0.0==
+
+```YAML
+dependencies:
+
+# Resolves to v1.2.0 (highest matching 1.x)
+
+* name: testing
+    version: "^1.0.0"
+    github: falcon-autotuning/testing
+  
+# Resolves to v1.2.0 (highest matching 1.2.x)
+
+* name: testing
+    version: "~1.2.0"
+    github: falcon-autotuning/testing
+  
+# Resolves to v2.0.0 (latest)
+
+* name: testing
+    github: falcon-autotuning/testing
+```
+
+### Release Structure
+
+For version resolution to work, your GitHub releases must include a tarball asset named =={repo}.tar.gz==:
+
+```Code
+<https://github.com/owner/repo/releases/download/v1.0.0/repo.tar.gz>
+```
+
+The tarball must contain:
+
+- ==falcon.yml== (package manifest with FFI hash mappings)
+- ==.fal== files (Falcon DSL scripts)
+- ==.so== files (pre-built FFI binaries, matching hashes in manifest)
+
+### Import Statements in .fal Files
+
+```falcon
+# Simple import (uses dependency from falcon.yml)
+
+import "testing"
+
+# Explicit package path
+
+import "github.com/falcon-autotuning/testing"
+
+# Specific version (overrides falcon.yml)
+
+import "github.com/falcon-autotuning/testing@v1.0.0"
+
+# Subdirectory or file
+
+import "github.com/falcon-autotuning/utils/math.fal"
+```
+
 ## API Overview
 
 ### PackageManager.hpp
