@@ -194,25 +194,69 @@ void PackageManager::install(const std::string &source,
 
   } else {
     std::filesystem::path src_path(source);
-    if (!PackageResolver::is_package(src_path)) {
-      throw std::runtime_error(
-          "install: source is not a Falcon package (missing falcon.yml): " +
-          source);
+    std::filesystem::path pkg_path = src_path;
+
+    if (source.ends_with(".tar.gz")) {
+      // Handle tarball installation
+      if (!std::filesystem::exists(src_path)) {
+        throw std::runtime_error("Tarball not found: " + source);
+      }
+
+      std::string stem = src_path.filename().string();
+      stem = stem.substr(0, stem.find(".tar.gz"));
+      
+      auto extract_dir = cache_->cache_dir() / stem;
+      std::filesystem::create_directories(extract_dir);
+
+      std::cout << "Extracting " << source << " to " << extract_dir << "...\n";
+      std::string tar_cmd = "tar -xzf \"" + src_path.string() + "\" -C \"" +
+                            extract_dir.string() + "\"";
+      
+      // If the tarball contains a single top-level directory, we might want --strip-components=1
+      // but let's assume it's a flat package for now, or check after extraction.
+      int ret = system(tar_cmd.c_str());
+      if (ret != 0) {
+        throw std::runtime_error("Failed to extract tarball: " + source);
+      }
+      
+      pkg_path = extract_dir;
+      // If the root doesn't have a falcon.yml, check if there's a single subdirectory that does.
+      if (!std::filesystem::exists(extract_dir / "falcon.yml")) {
+        for (const auto& entry : std::filesystem::directory_iterator(extract_dir)) {
+          if (entry.is_directory() && std::filesystem::exists(entry.path() / "falcon.yml")) {
+            pkg_path = entry.path();
+            break;
+          }
+        }
+      }
     }
 
-    std::string dep_name = src_path.stem().string();
+    if (!PackageResolver::is_package(pkg_path)) {
+      throw std::runtime_error(
+          "install: source is not a Falcon package (missing falcon.yml): " +
+          pkg_path.string());
+    }
+
+    auto manifest = PackageManifest::load(pkg_path / "falcon.yml");
+    std::string dep_name = manifest.name;
+    if (dep_name.empty()) {
+        dep_name = pkg_path.stem().string();
+    }
+
     for (const auto &d : manifest_.dependencies) {
-      if (d.name == dep_name)
+      if (d.name == dep_name) {
+        std::cout << "Package '" << dep_name << "' is already in dependencies.\n";
         return;
+      }
     }
 
     Dependency d;
     d.name = dep_name;
     d.version = version;
-    d.local_path = std::filesystem::weakly_canonical(src_path).string();
+    d.local_path = std::filesystem::weakly_canonical(pkg_path).string();
     manifest_.dependencies.push_back(std::move(d));
     manifest_.save(project_root_ / "falcon.yml");
-    std::cout << "Installed: " << source << "\n";
+    std::cout << "Installed: " << dep_name << " (from " << source << ")\n";
   }
 }
 
